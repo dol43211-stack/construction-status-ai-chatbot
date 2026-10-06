@@ -1,7 +1,26 @@
 // 문서 올리기 규칙 시험 (실행: npm test)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { checkFile, fileTypeOf, matchesSignature, MAX_FILE_BYTES, UPLOAD_MESSAGES } from "./upload-rules.ts";
+import {
+  checkFile,
+  duplicateMessage,
+  fileTypeOf,
+  matchesSignature,
+  MAX_FILE_BYTES,
+  UPLOAD_MESSAGES,
+} from "./upload-rules.ts";
+
+describe("중복 안내 문구", () => {
+  it("먼저 올린 파일 이름을 알면 함께 알려준다", () => {
+    assert.equal(
+      duplicateMessage("한빛청사_감리월간보고서_2026-08.pdf"),
+      "이미 올라온 문서입니다. (먼저 올린 파일: 한빛청사_감리월간보고서_2026-08.pdf)",
+    );
+  });
+  it("모르면 기본 문구만", () => {
+    assert.equal(duplicateMessage(), UPLOAD_MESSAGES.duplicate);
+  });
+});
 
 describe("형식 알아내기", () => {
   it("허용한 세 형식은 대소문자와 상관없이 알아본다", () => {

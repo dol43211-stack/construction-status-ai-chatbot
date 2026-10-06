@@ -22,7 +22,16 @@ export const UPLOAD_MESSAGES = {
   empty: "빈 파일은 올릴 수 없습니다.",
   // 확장자만 바꾼 파일 (예: 그림 파일 이름을 .pdf로 바꾼 경우)
   fakeType: "파일 내용이 확장자와 다릅니다. 원래 형식으로 저장된 파일을 올려주세요.",
+  // 같은 내용의 파일 (PRD 예외 상황 2번). 파일 이름이 달라도 내용이 같으면 같은 문서로 본다.
+  duplicate: "이미 올라온 문서입니다.",
 } as const;
+
+/** 중복 안내 문구. 먼저 올라온 파일의 이름을 알면 함께 알려준다. */
+export function duplicateMessage(existingFileName?: string): string {
+  return existingFileName
+    ? `${UPLOAD_MESSAGES.duplicate} (먼저 올린 파일: ${existingFileName})`
+    : UPLOAD_MESSAGES.duplicate;
+}
 
 /** 파일 이름의 확장자로 형식을 알아낸다. 허용하지 않는 형식이면 null */
 export function fileTypeOf(fileName: string): FileType | null {
