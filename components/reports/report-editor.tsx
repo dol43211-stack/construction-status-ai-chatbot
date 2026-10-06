@@ -1,10 +1,11 @@
 "use client";
 // ⑤ 초안 검토·수정 (DESIGN.md 3.3) — PLAN 21번
 // - 9개 항목 카드: 내용 고치기, "확인 필요" 표시 끄기, 📎 근거 문서 글자 보기
-// - 아래 고정 줄: [임시 저장] (확정하기는 PLAN 22번)
+// - 아래 고정 줄: [임시 저장] [확정하기] (확정은 PLAN 22번)
 // - 저장하지 않고 화면을 떠나려 하면 브라우저가 한 번 물어본다
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { saveReportDraft } from "@/lib/actions/reports";
+import { confirmReport, saveReportDraft } from "@/lib/actions/reports";
 import { MAX_ITEM_CHARS, type ItemEdit } from "@/lib/reports/edit";
 import { NO_DATA, type ReportItem } from "@/lib/reports/items";
 import { SourceViewer } from "./source-viewer";
@@ -17,6 +18,7 @@ export function ReportEditor({ reportId, items: initial }: { reportId: string; i
   const [viewing, setViewing] = useState<Viewing>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, startSaving] = useTransition();
+  const router = useRouter();
 
   const dirty = edits.some((e, i) => e.content !== saved[i].content || e.needsCheck !== saved[i].needsCheck);
   const checkCount = edits.filter((e) => e.needsCheck).length;
@@ -43,6 +45,30 @@ export function ReportEditor({ reportId, items: initial }: { reportId: string; i
         setEdits(stored);
         const time = new Date(result.savedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
         setMessage({ ok: true, text: `임시 저장했어요 (${time})` });
+      } else {
+        setMessage({ ok: false, text: result.message });
+      }
+    });
+  }
+
+  /**
+   * [확정하기] — PLAN 22번
+   * 확인 필요 항목이 남아 있으면 개수를 알려주고 한 번 더 묻는다. (최종 판단은 직원)
+   * 화면에서 고친 내용은 저장하지 않았더라도 함께 저장하며 확정한다.
+   */
+  function confirm() {
+    const question =
+      checkCount > 0
+        ? `확인 필요 항목이 ${checkCount}개 남아 있어요.\n그래도 확정할까요? 확정하면 더 이상 고칠 수 없어요.`
+        : "보고서를 확정할까요? 확정하면 더 이상 고칠 수 없어요.";
+    if (!window.confirm(question)) return;
+
+    setMessage(null);
+    startSaving(async () => {
+      const result = await confirmReport(reportId, edits);
+      if (result.ok) {
+        setSaved(edits); // 화면을 떠날 때 "저장 안 한 변경" 경고가 뜨지 않게
+        router.push(`/reports/${reportId}`);
       } else {
         setMessage({ ok: false, text: result.message });
       }
@@ -134,11 +160,11 @@ export function ReportEditor({ reportId, items: initial }: { reportId: string; i
             </button>
             <button
               type="button"
-              disabled
-              title="확정하기는 다음 작업(PLAN 22번)에서 연결됩니다"
-              className="rounded-lg bg-slate-300 px-4 py-2 text-sm font-semibold text-white"
+              onClick={confirm}
+              disabled={saving}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300"
             >
-              확정하기 (준비 중)
+              {saving ? "처리 중…" : "확정하기"}
             </button>
           </div>
         </div>

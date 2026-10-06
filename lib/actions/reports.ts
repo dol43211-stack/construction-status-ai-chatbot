@@ -60,6 +60,49 @@ export async function saveReportDraft(reportId: string, edits: ItemEdit[]): Prom
   return { ok: true, savedAt: saved.updated_at, items: result.items };
 }
 
+export type ConfirmResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * 보고서 확정 (DESIGN.md 6.2 confirmReport) — PLAN 22번
+ * 화면에 남아 있던 수정 내용까지 함께 저장한 뒤 "확정"으로 바꾸고 확정 시각을 기록한다.
+ * 확정한 보고서는 고칠 수 없다. (같은 공사·기간의 확정본은 데이터베이스 규칙으로도 하나만)
+ */
+export async function confirmReport(reportId: string, edits: ItemEdit[]): Promise<ConfirmResult> {
+  const supabase = getSupabase();
+  const { data: report, error } = await supabase
+    .from("reports")
+    .select("items, status")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (error) return dbFail("보고서 읽기", error.code);
+  if (!report) return { ok: false, message: "보고서를 찾을 수 없습니다. 화면을 새로고침해주세요." };
+  if (report.status !== "draft") return { ok: false, message: "이미 확정된 보고서입니다." };
+
+  const result = applyEdits(report.items as ReportItem[], edits);
+  if (!result.ok) return result;
+
+  const { data: done, error: confirmError } = await supabase
+    .from("reports")
+    .update({ items: result.items, status: "confirmed", confirmed_at: new Date().toISOString() })
+    .eq("id", reportId)
+    .eq("status", "draft") // 그사이 다른 사람이 확정했다면 다시 확정하지 않는다
+    .select("id")
+    .maybeSingle();
+  if (confirmError) {
+    if (confirmError.code === "23505") {
+      return { ok: false, message: "이 공사·기간의 보고서가 이미 확정되어 있습니다. 보고서 목록에서 확인해주세요." };
+    }
+    return dbFail("보고서 확정", confirmError.code);
+  }
+  if (!done) return { ok: false, message: "이미 확정된 보고서입니다." };
+
+  revalidatePath("/reports");
+  revalidatePath(`/reports/${reportId}`);
+  revalidatePath(`/reports/${reportId}/edit`);
+  revalidatePath("/"); // 홈의 "최근 확정 보고서"
+  return { ok: true };
+}
+
 export type DocumentTextResult = { ok: true; fileName: string; text: string } | { ok: false; message: string };
 
 /** 근거 문서 글자 보기 (설계 검토 m-11 getDocumentText) — 개인정보를 가린 본문만 돌려준다 */
