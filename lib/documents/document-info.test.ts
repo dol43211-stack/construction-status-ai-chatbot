@@ -1,7 +1,42 @@
 // AI가 읽은 문서 정보 검사·보정 시험 (실행: npm test) — PLAN 17번
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { normalizeDocumentInfo, validDate, type AiDocumentInfo } from "./document-info.ts";
+import {
+  checkConfirmable,
+  normalizeDocumentInfo,
+  validDate,
+  type AiDocumentInfo,
+  type DocumentInfoInput,
+} from "./document-info.ts";
+
+describe("직원이 [확인]을 누를 때의 검사 (PLAN 18번)", () => {
+  const ok: DocumentInfoInput = {
+    projectId: "id-hanbit",
+    docKind: "감리보고서",
+    writtenDate: "2026-10-05",
+    periodStart: "2026-09-01",
+    periodEnd: "2026-09-30",
+  };
+  const ids = ["id-hanbit", "id-nuri"];
+
+  it("네 칸이 모두 올바르면 통과", () => {
+    assert.equal(checkConfirmable(ok, ids), null);
+  });
+  it("빈 칸이 하나라도 있으면 막는다", () => {
+    assert.equal(checkConfirmable({ ...ok, projectId: "" }, ids), "공사를 골라주세요.");
+    assert.equal(checkConfirmable({ ...ok, docKind: "" }, ids), "문서 종류를 골라주세요.");
+    assert.equal(checkConfirmable({ ...ok, writtenDate: "" }, ids), "작성일을 입력해주세요.");
+    assert.equal(checkConfirmable({ ...ok, periodEnd: "" }, ids), "대상 기간의 시작일과 끝일을 입력해주세요.");
+  });
+  it("등록되지 않은 공사, 정해진 종류 밖의 값, 거꾸로 된 기간은 막는다", () => {
+    assert.equal(checkConfirmable({ ...ok, projectId: "id-unknown" }, ids), "등록된 공사 중에서 골라주세요.");
+    assert.equal(checkConfirmable({ ...ok, docKind: "설계도면" }, ids), "문서 종류를 골라주세요.");
+    assert.equal(
+      checkConfirmable({ ...ok, periodStart: "2026-09-30", periodEnd: "2026-09-01" }, ids),
+      "대상 기간의 끝일이 시작일보다 앞설 수 없습니다.",
+    );
+  });
+});
 
 const IDS = ["id-hanbit", "id-nuri", "id-haneul"];
 const base: AiDocumentInfo = {

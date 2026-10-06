@@ -44,6 +44,31 @@ export function validDate(value: string | null): string | null {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value ? value : null;
 }
 
+/** 직원이 화면에서 입력한 문서 정보 (빈 칸은 빈 글자) */
+export type DocumentInfoInput = {
+  projectId: string;
+  docKind: string;
+  writtenDate: string;
+  periodStart: string;
+  periodEnd: string;
+};
+
+/**
+ * 직원이 [확인]을 누를 때의 검사 — PLAN 18번 (설계 검토 I-10)
+ * 네 칸이 모두 채워져야 확인할 수 있다. 빈 칸이 있는 문서가 "확인됨"이 되면
+ * 보고서 문서 고르기와 챗봇에서 조용히 빠지기 때문이다.
+ * 문제가 있으면 안내 문구, 없으면 null
+ */
+export function checkConfirmable(input: DocumentInfoInput, projectIds: string[]): string | null {
+  if (!input.projectId) return "공사를 골라주세요.";
+  if (!projectIds.includes(input.projectId)) return "등록된 공사 중에서 골라주세요.";
+  if (!(DOC_KINDS as readonly string[]).includes(input.docKind)) return "문서 종류를 골라주세요.";
+  if (!validDate(input.writtenDate)) return "작성일을 입력해주세요.";
+  if (!validDate(input.periodStart) || !validDate(input.periodEnd)) return "대상 기간의 시작일과 끝일을 입력해주세요.";
+  if (input.periodEnd < input.periodStart) return "대상 기간의 끝일이 시작일보다 앞설 수 없습니다.";
+  return null;
+}
+
 /**
  * AI 답을 검사·보정해 장부에 저장할 모양으로 바꾼다.
  * - 공사 번호가 목록 범위를 벗어나면 연결하지 않는다. (AI가 없는 공사를 지어내지 못하게)
