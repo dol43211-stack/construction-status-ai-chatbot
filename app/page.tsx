@@ -1,7 +1,13 @@
 // ① 홈 (DESIGN.md 3.3)
 import Link from "next/link";
+import { connection } from "next/server";
+import { ReportList } from "@/components/reports/report-list";
+import { listReports } from "@/lib/data/reports";
 
-export default function Home() {
+export default async function Home() {
+  await connection(); // 화면을 열 때마다 최근 확정 보고서를 새로 읽는다
+  const recent = await listReports({ status: "confirmed", limit: 5 });
+
   return (
     <div>
       <h1 className="text-2xl font-bold">무엇을 도와드릴까요?</h1>
@@ -31,12 +37,17 @@ export default function Home() {
         </Link>
       </div>
 
-      {/* 최근 확정 보고서 5개 (PLAN 23번에서 실제 목록으로 바꾼다) */}
+      {/* 최근 확정 보고서 5개 (PLAN 23번) */}
       <section className="mt-10">
-        <h2 className="text-lg font-semibold">최근 확정 보고서</h2>
-        <p className="mt-3 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
-          아직 확정된 보고서가 없습니다.
-        </p>
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-lg font-semibold">최근 확정 보고서</h2>
+          <Link href="/reports" className="text-sm text-blue-700 hover:underline">
+            전체 보기
+          </Link>
+        </div>
+        <div className="mt-3">
+          <ReportList reports={recent} empty="아직 확정된 보고서가 없습니다." />
+        </div>
       </section>
     </div>
   );
