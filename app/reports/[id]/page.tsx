@@ -1,4 +1,4 @@
-// ⑦ 확정 보고서 보기 (DESIGN.md 3.3) — PLAN 22번 (내려받기 버튼은 PLAN 24~25번)
+// ⑦ 확정 보고서 보기 (DESIGN.md 3.3) — PLAN 22번, 엑셀 내려받기 24번 (한글은 25번)
 // 휴대폰에서도 읽기 편하도록 9개 항목을 세로로 읽기 전용으로 보여준다.
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -37,9 +37,13 @@ export default async function ReportPage({ params }: PageProps<"/reports/[id]">)
         </p>
         <p className="mt-1 text-sm text-slate-500">확정일 {confirmedAt}</p>
         <div className="mt-3 flex flex-wrap gap-2">
-          <span className="rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-sm text-slate-400">
-            엑셀 내려받기 (준비 중)
-          </span>
+          <a
+            href={`/api/reports/${report.id}/xlsx`}
+            download
+            className="rounded-lg bg-green-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-800"
+          >
+            📗 엑셀 내려받기
+          </a>
           <span className="rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-sm text-slate-400">
             한글 내려받기 (준비 중)
           </span>
