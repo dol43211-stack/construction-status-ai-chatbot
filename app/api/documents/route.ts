@@ -1,8 +1,9 @@
 // POST /api/documents — 문서 1개 올리기 (DESIGN.md 4.2 흐름 ①, 6.1) — PLAN 11번
-// 처리 순서: 형식·크기 다시 검사 → 파일 서명 확인 → 지문(해시)으로 중복 확인 → 장부(documents 표)에 기록 → 보관함에 원본 저장
+// 처리 순서: 형식·크기 다시 검사 → 파일 서명 확인 → 지문(해시)으로 중복 확인 → 장부(documents 표)에 기록
+//           → 보관함에 원본 저장 → 글자 꺼내기 → 개인정보 가림 → 본문 저장
 // - 보관함 경로는 한글 파일 이름 대신 "문서번호.확장자"로 한다. (설계 검토 I-7: 한글 경로 오류 방지)
 // - 원래 파일 이름은 장부의 file_name 칸에만 남긴다.
-// - 글자 꺼내기(PLAN 13~15)와 AI 정보 읽기(PLAN 17)는 이후 작업에서 이 흐름 뒤에 붙인다.
+// - 엑셀·한글 글자 꺼내기(PLAN 14~15)와 AI 정보 읽기(PLAN 17)는 이후 작업에서 붙인다.
 import { createHash, randomUUID } from "node:crypto";
 import {
   checkFile,
@@ -11,6 +12,8 @@ import {
   matchesSignature,
   UPLOAD_MESSAGES,
 } from "@/lib/documents/upload-rules";
+import { extractText } from "@/lib/extract";
+import { maskPersonalInfo } from "@/lib/masking";
 import { DOCUMENTS_BUCKET, getSupabase } from "@/lib/supabase";
 
 const SAVE_FAILED = "문서를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
@@ -77,5 +80,19 @@ export async function POST(request: Request) {
     return reply(500, { error: SAVE_FAILED });
   }
 
-  return reply(201, { document: { id, fileName: file.name, fileType: type } });
+  // 7. 글자 꺼내기 → 개인정보 가림 → 장부에 저장 (PLAN 13번)
+  //    원본은 이미 보관했으므로, 글자 꺼내기가 실패해도 문서는 남긴다. (설계 검토 I-6)
+  //    읽을 수 없는 파일 안내는 PLAN 16번에서 붙인다.
+  let text = "";
+  try {
+    text = maskPersonalInfo(await extractText(type, bytes));
+  } catch (error) {
+    console.error(`[글자 꺼내기 오류] ${type}: ${error instanceof Error ? error.name : "알 수 없음"}`);
+  }
+  if (text) {
+    const { error: textError } = await supabase.from("documents").update({ text }).eq("id", id);
+    if (textError) console.error(`[DB 오류] 본문 저장: ${textError.code}`);
+  }
+
+  return reply(201, { document: { id, fileName: file.name, fileType: type, characters: text.length } });
 }
