@@ -1,10 +1,12 @@
 "use client";
-// ④ 새 보고서 만들기 (DESIGN.md 3.3) — PLAN 19번: 조건 고르기 + 해당 문서 미리보기
+// ④ 새 보고서 만들기 (DESIGN.md 3.3) — PLAN 19번: 조건 고르기 + 해당 문서 미리보기, 20번: 초안 만들기
 // 1단계 공사 → 2단계 주간(월~일)·월간(1일~말일) → 3단계 이 기간의 문서 N건 미리보기
 // 조건을 바꿀 때마다 서버에 물어 목록을 바로 다시 보여준다.
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { previewReportDocuments, type PreviewResult } from "@/lib/actions/reports";
+import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 import { formatPeriod, type PeriodType } from "@/lib/reports/period";
 
 type Project = { id: string; name: string };
@@ -24,6 +26,9 @@ export function NewReportForm({
   const [month, setMonth] = useState(defaultMonth);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [loading, startLoading] = useTransition();
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const router = useRouter();
   const latest = useRef(0); // 조건을 빠르게 바꿀 때 늦게 온 옛 결과가 덮어쓰지 않게
 
   const value = type === "weekly" ? weekDate : month;
@@ -148,14 +153,36 @@ export function NewReportForm({
 
       <button
         type="button"
-        disabled={!canGenerate}
-        title="초안 만들기는 다음 작업(PLAN 20번)에서 연결됩니다"
-        className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+        disabled={!canGenerate || generating}
+        onClick={generate}
+        className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
       >
-        초안 만들기 (준비 중)
+        {generating ? "AI가 초안을 쓰고 있어요… (최대 2분)" : "초안 만들기"}
       </button>
+      {generateError && (
+        <p role="alert" className="text-sm text-red-600">
+          ⚠️ {generateError}
+        </p>
+      )}
     </div>
   );
+
+  /** [초안 만들기] — PLAN 20번. 성공하면 초안 화면으로, 실패하면 고른 조건은 그대로 두고 안내한다. */
+  async function generate() {
+    setGenerating(true);
+    setGenerateError(null);
+    const result = await fetchWithTimeout<{ reportId: string }>("/api/reports/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, periodType: type, value }),
+    });
+    if (result.ok) {
+      router.push(`/reports/${result.data.reportId}/edit`);
+      return; // 화면이 바뀔 때까지 버튼은 "쓰고 있어요" 상태로 둔다
+    }
+    setGenerateError(result.message);
+    setGenerating(false);
+  }
 }
 
 function Step({ no, title, children }: { no: number; title: string; children: React.ReactNode }) {
