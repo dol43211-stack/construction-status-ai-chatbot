@@ -1,7 +1,11 @@
 "use server";
-// 보고서 관련 서버 함수 (DESIGN.md 6.2, 설계 검토 m-11 `previewReportDocuments`) — PLAN 19번
+// 보고서 관련 서버 함수 (DESIGN.md 6.2, 설계 검토 m-11) — PLAN 19·21번
+import { revalidatePath } from "next/cache";
 import { findReportDocuments, type ReportDocument } from "@/lib/data/report-documents";
+import { applyEdits, type ItemEdit } from "@/lib/reports/edit";
+import type { ReportItem } from "@/lib/reports/items";
 import { reportPeriod, type Period, type PeriodType } from "@/lib/reports/period";
+import { getSupabase } from "@/lib/supabase";
 
 export type PreviewResult =
   | { ok: true; period: Period; documents: ReportDocument[]; pendingCount: number }
@@ -23,4 +27,55 @@ export async function previewReportDocuments(
   } catch {
     return { ok: false, message: "문서를 불러오지 못했습니다. 잠시 후 다시 시도해주세요." };
   }
+}
+
+export type SaveResult = { ok: true; savedAt: string; items: ReportItem[] } | { ok: false; message: string };
+
+/** 초안 임시 저장 (DESIGN.md 6.2 saveReportDraft) — PLAN 21번 */
+export async function saveReportDraft(reportId: string, edits: ItemEdit[]): Promise<SaveResult> {
+  const supabase = getSupabase();
+  const { data: report, error } = await supabase
+    .from("reports")
+    .select("items, status")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (error) return dbFail("보고서 읽기", error.code);
+  if (!report) return { ok: false, message: "보고서를 찾을 수 없습니다. 화면을 새로고침해주세요." };
+  if (report.status !== "draft") return { ok: false, message: "확정된 보고서는 고칠 수 없습니다." };
+
+  const result = applyEdits(report.items as ReportItem[], edits);
+  if (!result.ok) return result;
+
+  const { data: saved, error: saveError } = await supabase
+    .from("reports")
+    .update({ items: result.items })
+    .eq("id", reportId)
+    .eq("status", "draft") // 저장하는 사이에 확정됐다면 덮어쓰지 않는다
+    .select("updated_at")
+    .maybeSingle();
+  if (saveError) return dbFail("초안 저장", saveError.code);
+  if (!saved) return { ok: false, message: "확정된 보고서는 고칠 수 없습니다." };
+
+  revalidatePath(`/reports/${reportId}/edit`);
+  return { ok: true, savedAt: saved.updated_at, items: result.items };
+}
+
+export type DocumentTextResult = { ok: true; fileName: string; text: string } | { ok: false; message: string };
+
+/** 근거 문서 글자 보기 (설계 검토 m-11 getDocumentText) — 개인정보를 가린 본문만 돌려준다 */
+export async function getDocumentText(documentId: string): Promise<DocumentTextResult> {
+  if (!/^[0-9a-f-]{36}$/i.test(documentId)) return { ok: false, message: "문서를 찾을 수 없습니다." };
+  const { data, error } = await getSupabase()
+    .from("documents")
+    .select("file_name, text")
+    .eq("id", documentId)
+    .maybeSingle();
+  if (error) return dbFail("문서 읽기", error.code);
+  if (!data) return { ok: false, message: "문서를 찾을 수 없습니다. 지워졌을 수 있습니다." };
+  return { ok: true, fileName: data.file_name, text: data.text };
+}
+
+function dbFail(step: string, code: string): { ok: false; message: string } {
+  console.error(`[DB 오류] ${step}: ${code}`);
+  return { ok: false, message: "처리하지 못했습니다. 잠시 후 다시 시도해주세요." };
 }
