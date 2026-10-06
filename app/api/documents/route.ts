@@ -1,12 +1,15 @@
 // POST /api/documents — 문서 1개 올리기 (DESIGN.md 4.2 흐름 ①, 6.1) — PLAN 11~16번
 // 처리 순서: 형식·크기 다시 검사 → 파일 서명 확인 → 지문(해시)으로 중복 확인
 //           → 글자 꺼내기(읽을 수 없으면 여기서 안내하고 끝) → 개인정보 가림
-//           → 장부(documents 표)에 기록 → 보관함에 원본 저장
+//           → 장부(documents 표)에 기록 → 보관함에 원본 저장 → AI로 문서 정보 읽기
 // - 읽을 수 없는 파일은 저장하기 전에 걸러내므로, 장부나 보관함에 아무것도 남지 않는다. (PRD 예외 상황 1번)
 // - 보관함 경로는 한글 파일 이름 대신 "문서번호.확장자"로 한다. (설계 검토 I-7: 한글 경로 오류 방지)
 // - 원래 파일 이름은 장부의 file_name 칸에만 남긴다.
-// - AI 정보 읽기(PLAN 17)는 저장이 끝난 뒤에 붙인다. (설계 검토 I-6: AI가 실패해도 문서는 남긴다)
+// - AI 정보 읽기는 저장이 끝난 뒤에 한다. (설계 검토 I-6: AI가 실패해도 문서는 남긴다)
 import { createHash, randomUUID } from "node:crypto";
+import { AiError } from "@/lib/ai/errors";
+import { readDocumentInfo } from "@/lib/ai/read-document-info";
+import type { DocumentInfo } from "@/lib/documents/document-info";
 import {
   checkFile,
   duplicateMessage,
@@ -18,6 +21,9 @@ import {
 import { extractDocumentText } from "@/lib/extract";
 import { maskPersonalInfo } from "@/lib/masking";
 import { DOCUMENTS_BUCKET, getSupabase } from "@/lib/supabase";
+
+/** AI 정보 읽기까지 포함해 최대 2분 (DESIGN.md 6.1) */
+export const maxDuration = 120;
 
 const SAVE_FAILED = "문서를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.";
 const UNIQUE_VIOLATION = "23505"; // PostgreSQL: 같은 값이 이미 있음
@@ -91,5 +97,41 @@ export async function POST(request: Request) {
     return reply(500, { error: SAVE_FAILED });
   }
 
-  return reply(201, { document: { id, fileName: file.name, fileType: type, characters: text.length } });
+  // 8. AI로 문서 정보 읽기 → 장부에 저장 (PLAN 17번)
+  //    문서는 이미 저장됐으므로 AI가 실패해도 그대로 둔다. 정보 칸은 비워 두고 직원이 직접 입력한다.
+  //    읽어낸 정보는 "확인 필요" 상태(confirmed = false)로 남고, 직원이 확인해야 확정된다. (PLAN 18번)
+  const info = await readAndSaveInfo(id, text);
+
+  return reply(201, {
+    document: { id, fileName: file.name, fileType: type, characters: text.length, info },
+  });
+}
+
+/** AI로 문서 정보를 읽어 장부에 저장한다. 실패하면 null (오류 기록은 callAi가 남긴다) */
+async function readAndSaveInfo(
+  id: string,
+  text: string,
+): Promise<(DocumentInfo & { projectName: string | null }) | null> {
+  const supabase = getSupabase();
+  try {
+    const { data: projects, error } = await supabase.from("projects").select("id, name").order("created_at");
+    if (error) throw new Error(`공사 목록 읽기 실패: ${error.code}`);
+
+    const info = await readDocumentInfo(text, projects);
+    const { error: updateError } = await supabase
+      .from("documents")
+      .update({
+        project_id: info.projectId,
+        doc_kind: info.docKind,
+        written_date: info.writtenDate,
+        period_start: info.periodStart,
+        period_end: info.periodEnd,
+      })
+      .eq("id", id);
+    if (updateError) throw new Error(`문서 정보 저장 실패: ${updateError.code}`);
+    return { ...info, projectName: projects.find((p) => p.id === info.projectId)?.name ?? null };
+  } catch (error) {
+    if (!(error instanceof AiError)) console.error(`[문서 정보] ${error instanceof Error ? error.message : "알 수 없는 오류"}`);
+    return null;
+  }
 }

@@ -8,11 +8,31 @@ import { ACCEPT, checkFile, MAX_FILES, UPLOAD_MESSAGES } from "@/lib/documents/u
 import { fetchWithTimeout } from "@/lib/fetch-with-timeout";
 
 type Status = "waiting" | "uploading" | "done" | "error";
-type Item = { key: string; name: string; status: Status; message?: string };
+type Item = { key: string; name: string; status: Status; message?: string; detail?: string };
+
+/** 서버가 돌려주는 AI 읽기 결과 (PLAN 17번) */
+type UploadedInfo = {
+  projectName: string | null;
+  docKind: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+} | null;
+
+/** "한빛청사 신축공사 · 감리보고서 · 2026-09-01 ~ 2026-09-30" 처럼 한 줄로 */
+function describeInfo(info: UploadedInfo): string {
+  if (!info) return "AI가 정보를 읽지 못했어요. 문서 목록에서 직접 입력해주세요.";
+  const period =
+    info.periodStart && info.periodEnd
+      ? info.periodStart === info.periodEnd
+        ? info.periodStart
+        : `${info.periodStart} ~ ${info.periodEnd}`
+      : "기간 모름";
+  return [info.projectName ?? "공사 모름", info.docKind ?? "종류 모름", period].join(" · ");
+}
 
 const STATUS_LABEL: Record<Status, string> = {
   waiting: "⏳ 기다리는 중",
-  uploading: "⏳ 올리는 중",
+  uploading: "⏳ 올리고 AI가 읽는 중",
   done: "✅ 완료",
   error: "⚠️",
 };
@@ -57,8 +77,16 @@ export function UploadArea() {
       update(item.key, { status: "uploading" });
       const body = new FormData();
       body.append("file", file);
-      const result = await fetchWithTimeout(`/api/documents`, { method: "POST", body });
-      update(item.key, result.ok ? { status: "done" } : { status: "error", message: result.message });
+      const result = await fetchWithTimeout<{ document: { info: UploadedInfo } }>(`/api/documents`, {
+        method: "POST",
+        body,
+      });
+      update(
+        item.key,
+        result.ok
+          ? { status: "done", detail: describeInfo(result.data.document.info) }
+          : { status: "error", message: result.message },
+      );
     }
     if (inputRef.current) inputRef.current.value = "";
     router.refresh(); // 올라온 문서 수 등 화면 정보를 새로 읽는다
@@ -112,6 +140,7 @@ export function UploadArea() {
               <span className={i.status === "error" ? "text-red-600" : "text-slate-600"}>
                 {STATUS_LABEL[i.status]} {i.message}
               </span>
+              {i.detail && <span className="w-full text-xs text-slate-500">🤖 {i.detail}</span>}
             </li>
           ))}
         </ul>
