@@ -24,7 +24,15 @@ export const UPLOAD_MESSAGES = {
   fakeType: "파일 내용이 확장자와 다릅니다. 원래 형식으로 저장된 파일을 올려주세요.",
   // 같은 내용의 파일 (PRD 예외 상황 2번). 파일 이름이 달라도 내용이 같으면 같은 문서로 본다.
   duplicate: "이미 올라온 문서입니다.",
+  // 글자를 꺼낼 수 없는 파일 (PRD 예외 상황 1번, DESIGN.md 6.3)
+  unreadable: "이 파일은 글자를 읽을 수 없습니다. PDF(글자 복사 가능)·.hwpx·.xlsx로 다시 저장해 올려주세요.",
+  encrypted: "암호가 걸린 파일은 읽을 수 없습니다. 암호를 풀고 다시 저장해 올려주세요.",
+  // 암호 걸린 엑셀과 옛 엑셀(.xls)은 둘 다 "복합 문서" 형식이라 겉으로 구별할 수 없다
+  lockedOrOldXlsx: "암호가 걸린 엑셀이거나 옛 엑셀(.xls) 파일입니다. 암호를 풀고 .xlsx로 다시 저장해 올려주세요.",
 } as const;
+
+/** 글자를 이만큼도 꺼내지 못하면 "읽을 수 없는 파일"로 본다 (공백 제외 글자 수, 설계 검토 I-8) */
+export const MIN_READABLE_CHARS = 50;
 
 /** 중복 안내 문구. 먼저 올라온 파일의 이름을 알면 함께 알려준다. */
 export function duplicateMessage(existingFileName?: string): string {
@@ -56,4 +64,20 @@ export function matchesSignature(type: FileType, head: Uint8Array): boolean {
   const startsWith = (sig: number[]) => sig.every((b, i) => head[i] === b);
   if (type === "pdf") return startsWith([0x25, 0x50, 0x44, 0x46]); // %PDF
   return startsWith([0x50, 0x4b, 0x03, 0x04]); // PK.. (zip)
+}
+
+/**
+ * 서명이 맞지 않을 때, 무엇 때문인지 더 친절한 안내를 고른다.
+ * 암호 걸린 엑셀, 옛 엑셀(.xls), 옛 한글(.hwp)은 모두 "복합 문서"(D0 CF 11 E0)로 시작한다.
+ */
+export function signatureMismatchMessage(type: FileType, head: Uint8Array): string {
+  const compound = [0xd0, 0xcf, 0x11, 0xe0].every((b, i) => head[i] === b);
+  if (compound && type === "xlsx") return UPLOAD_MESSAGES.lockedOrOldXlsx;
+  if (compound && type === "hwpx") return UPLOAD_MESSAGES.oldHwp; // .hwp 파일 이름만 .hwpx로 바꾼 경우
+  return UPLOAD_MESSAGES.fakeType;
+}
+
+/** 꺼낸 글자가 충분한지 (스캔본처럼 글자가 거의 없으면 false) */
+export function isReadableText(text: string): boolean {
+  return text.replace(/\s/g, "").length >= MIN_READABLE_CHARS;
 }

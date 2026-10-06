@@ -5,8 +5,11 @@ import {
   checkFile,
   duplicateMessage,
   fileTypeOf,
+  isReadableText,
   matchesSignature,
   MAX_FILE_BYTES,
+  MIN_READABLE_CHARS,
+  signatureMismatchMessage,
   UPLOAD_MESSAGES,
 } from "./upload-rules.ts";
 
@@ -47,6 +50,27 @@ describe("이름·크기 검사", () => {
   it("4MB 초과와 빈 파일", () => {
     assert.equal(checkFile("큰파일.pdf", MAX_FILE_BYTES + 1), UPLOAD_MESSAGES.tooBig);
     assert.equal(checkFile("빈파일.pdf", 0), UPLOAD_MESSAGES.empty);
+  });
+});
+
+describe("서명이 다를 때 안내 문구 고르기", () => {
+  const compound = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]); // 복합 문서
+  it("복합 문서인 .xlsx → 암호 걸린 엑셀이거나 옛 .xls", () => {
+    assert.equal(signatureMismatchMessage("xlsx", compound), UPLOAD_MESSAGES.lockedOrOldXlsx);
+  });
+  it("복합 문서인 .hwpx → 이름만 바꾼 옛 .hwp", () => {
+    assert.equal(signatureMismatchMessage("hwpx", compound), UPLOAD_MESSAGES.oldHwp);
+  });
+  it("그 밖에는 확장자와 내용이 다르다는 안내", () => {
+    assert.equal(signatureMismatchMessage("pdf", new Uint8Array([0x89, 0x50, 0x4e, 0x47])), UPLOAD_MESSAGES.fakeType);
+  });
+});
+
+describe("글자 양으로 읽을 수 있는지 판단", () => {
+  it(`공백을 뺀 글자가 ${MIN_READABLE_CHARS}자 이상이면 읽을 수 있음`, () => {
+    assert.ok(isReadableText("가".repeat(MIN_READABLE_CHARS)));
+    assert.ok(!isReadableText("가".repeat(MIN_READABLE_CHARS - 1) + " \n\n   "));
+    assert.ok(!isReadableText(""));
   });
 });
 
