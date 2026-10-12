@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 실제 공사 자료로 만든 보고서 (외부 유출 방지 — 절대 커밋하지 않음)
+/output/
