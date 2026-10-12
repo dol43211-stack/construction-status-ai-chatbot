@@ -10,8 +10,15 @@ PLAN.md 6번 작업으로 만든 **시험용 가상 문서**입니다. 모든 �
 | `hwpx-원고/` | 감독지시서 6개의 원고(.txt). 한글 프로그램에서 .hwpx로 저장할 재료 |
 | `sample-data.mjs` | 모든 샘플 내용의 원본 데이터 (숫자를 바꾸려면 여기만 고친다) |
 | `generate-samples.mjs` | 원본 데이터로 PDF·엑셀·원고를 만드는 스크립트 |
+| `chat-questions.mjs` | 챗봇 시험 질문 20개와 정답표 (PLAN 29번) |
+| `check-chat.mjs` | 챗봇 성공 기준 시험 SC-3·4·5 (PLAN 30번) |
+| `check-report.mjs` | 보고서 초안 성공 기준 시험 SC-1·2·7 (PLAN 30번, 시험 초안은 끝나면 정리) |
 
 다시 만들려면: `node samples/generate-samples.mjs`
+
+성공 기준 시험 (개발 서버를 켜고, 샘플 문서가 올라가 "확인"된 상태에서):
+- 챗봇: `node samples/check-chat.mjs`
+- 보고서 초안: `node --env-file=.env --no-warnings samples/check-report.mjs`
 
 ## 문서 구성 (가상 공사 3건 × 2개월: 2026년 8월·9월)
 
