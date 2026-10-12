@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 공사관리 현황 관리 AI챗봇
 
-## Getting Started
+서울지방조달청 공사관리과의 건설공사 진행현황 업무를 돕는 웹 앱입니다. (바이브 코딩 실습 결과물)
 
-First, run the development server:
+> ⚠️ **실습용 가상 자료만 사용합니다.** 앱에 들어 있는 공사·업체·사람·번호는 모두 지어낸 것입니다. 실제 공사 문서와 개인정보를 올리지 마세요.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 무엇을 하나요?
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+공사별로 흩어진 감리보고서, 업체 주간·월간보고서, 감독지시서를 올리면 두 가지 일을 합니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| 기능 | 하는 일 |
+|---|---|
+| **M1 보고서 초안** | 공사 1건의 주간(월~일)·월간(1일~말일) 진행현황 보고서 초안을 만듭니다. 직원이 검토·수정·확정하면 엑셀(.xlsx)과 한글(.hwpx) 파일로 내려받을 수 있습니다. |
+| **M2 질문·답변 챗봇** | "한빛청사 9월 공정률은?"처럼 물으면, 올라온 문서에 있는 내용만으로 5문장 이내로 답합니다. 답 끝에는 근거 문서를 붙입니다. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+보고서는 아래 9개 항목을 항상 같은 순서로 씁니다.
+공정률 · 기성 실적 · 계약변경 현황 · 하도급 현황 · 관급자재 수급현황 · 하도급 및 근로자 노임지급 현황 · 시공실패 및 하자 현황 · 건설사고 현황 · 주요 이슈
 
-## Learn More
+### 지키는 규칙
+- **지어내지 않습니다.** 자료가 없으면 "해당 기간 자료 없음" 또는 "올라온 자료에서 찾을 수 없습니다"라고 씁니다.
+- **근거를 붙입니다.** 숫자마다 근거 문서를 괄호로 붙이고, 문서끼리 숫자가 다르면 둘 다 적고 "확인 필요"로 표시합니다.
+- **개인정보를 가립니다.** 주민등록번호·전화번호·계좌번호는 가려서 저장하고 표시합니다. (예: 900101-1******)
+- **추측하지 않습니다.** 공사명이 모호하면 어느 공사인지 되묻습니다.
+- **휴대폰에서도 씁니다.** 휴대폰 화면에 맞춰지고, 홈 화면에 앱처럼 추가할 수 있습니다. (PWA)
 
-To learn more about Next.js, take a look at the following resources:
+## 기술 스택
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Next.js 16** (App Router) + React 19 + TypeScript + Tailwind CSS 4
+- **Supabase**: 파일 보관과 데이터베이스 (서버 쪽에서만 접속)
+- **OpenAI API**: 문서 정보 읽기, 보고서 초안, 질문 답변
+- **배포**: Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 직접 실행하기
 
-## Deploy on Vercel
+1. 패키지를 설치합니다.
+   ```bash
+   npm install
+   ```
+2. 프로젝트 폴더에 `.env` 파일을 만들고 아래 값을 넣습니다. (이 파일은 GitHub에 올리지 않습니다)
+   ```
+   SUPABASE_URL=
+   SUPABASE_SERVICE_ROLE_KEY=
+   OPENAI_API_KEY=
+   OPENAI_MODEL=
+   ```
+3. Supabase에 표와 파일 보관함을 만듭니다. (`supabase/migrations/` 폴더의 SQL)
+4. 개발 서버를 켜고 http://localhost:3000 을 엽니다.
+   ```bash
+   npm run dev
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| 명령 | 하는 일 |
+|---|---|
+| `npm run dev` | 개발 서버 실행 |
+| `npm run build` | 배포용 빌드 |
+| `npm run lint` | 코드 검사 |
+| `npm test` | 시험 코드 실행 (개인정보 가림, 기간 계산 등) |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 폴더 구성
+
+| 폴더·파일 | 내용 |
+|---|---|
+| `app/` | 화면과 서버 쪽 코드 (`app/api/`) |
+| `components/` | 화면 부품 |
+| `lib/` | 개인정보 가림, 문서 글자 꺼내기, 한글·엑셀 만들기, AI 호출 |
+| `samples/` | 시험용 가상 문서와 성공 기준 시험 스크립트 ([samples/README.md](samples/README.md)) |
+| `supabase/` | 데이터베이스 구조 |
+| [PRD.md](PRD.md) · [PLAN.md](PLAN.md) · [DESIGN.md](DESIGN.md) | 기획서 · 개발 계획서 · 설계서 |
+| [CHECK.md](CHECK.md) | 점검 결과 (성공 기준·설계 대조·보안) |
+
+## 만들지 않은 것
+
+옛 한글(.hwp) 파일, 스캔 이미지 글자 인식(OCR), 로그인·권한 관리, 조달청 내부 시스템·나라장터 연동, 결재·자동 발송·알림, 앱스토어용 설치형 앱.
+
+> 로그인 기능이 없어서 주소를 아는 누구나 앱을 쓸 수 있습니다. 실습용 공개 데모로만 사용해 주세요. 남은 보완점은 [CHECK.md](CHECK.md)에 정리되어 있습니다.
